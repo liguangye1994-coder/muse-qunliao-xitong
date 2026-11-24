@@ -1,0 +1,5 @@
+id: "custom.group-chat"
+title: "Group Chat"
+description: "Connect Muse to a self-hosted group chat: read the Muse inbox, post replies, react to messages, and share files."
+include_in_prompt: true
+require_auth: true

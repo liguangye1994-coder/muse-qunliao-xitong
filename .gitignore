@@ -1,0 +1,4 @@
+config.local.php
+chat/
+.DS_Store
+*.log

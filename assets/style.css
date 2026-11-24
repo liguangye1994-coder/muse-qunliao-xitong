@@ -1,0 +1,276 @@
+/* 群聊站样式（你的域名/）—— 按 Muse 聊天界面风格重做
+ * 设计口径取自 muse.ai 当天实测的 CSS：底色 #fcfcfc、次级面 #f3f4f5、
+ * 主字 #17171a、主蓝 #0064d4（blue-650）、浅蓝底 #f0f6ff、
+ * 边框 #e9eaeb / #d7dceb、圆角 12/16/20px、主按钮全圆角胶囊。
+ * 字体用 Optimistic（Meta 官方字体，站外无依赖时回落系统字体）。
+ * 聊天页按 Muse 应用里的对话样式：别人靠左白底气泡、自己靠右灰底气泡、
+ * 助手/助手靠左浅蓝底、头像圆字、发送按钮是蓝色圆形上箭头；
+ * 聊天区不套卡片、直接铺满，登录页和管理页仍用卡片。
+ * 只改外观：审核、预览、滚动逻辑一律不动。无外部依赖，纯手写。 */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "Optimistic", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  background: #fcfcfc;
+  color: #17171a;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 760px; margin: 0 auto; padding: 20px 16px 32px; }
+/* 左边栏布局（照 Muse 应用里带旁聊的侧栏）：左边 240px 导航 + 右边聊天区；
+   只用于群聊页（.layout），登录页/管理页仍用原来的单栏 .wrap。
+   输入框钉在最底下：整页占满视口高度（height: 100vh，不再是 min-height），
+   右边聊天区是竖向 flex——顶栏不动、消息区 flex:1 滚动、输入区钉在底部。 */
+.layout { display: flex; max-width: 1080px; margin: 0 auto; height: 100vh; }
+.layout .wrap { max-width: none; margin: 0; flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; padding-bottom: 16px; }
+.sidebar { flex: 0 0 240px; border-right: 1px solid #f3f4f5; padding: 20px 12px; background: #fcfcfc; overflow-y: auto; }
+.side-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 10px 14px; }
+.side-title { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+/* 手机上边栏里的 ×（桌面不显示，边栏常驻不用关）；点外面遮罩也能关 */
+#side-close { display: none; border: 0; background: transparent; color: #6b7280; font-size: 22px; line-height: 1; padding: 2px 8px; cursor: pointer; }
+#side-close:hover { color: #17171a; background: transparent; }
+#side-backdrop { display: none; }
+.side-sec { font-size: 12px; font-weight: 600; color: #6b7280; padding: 12px 10px 6px; }
+.side-list { list-style: none; margin: 0; padding: 0; }
+.side-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: #17171a; font-size: 15px; font-weight: 500; cursor: pointer; text-align: left; }
+.side-item:hover { background: #f3f4f5; }
+.side-avatar { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; background: #e9eaeb; color: #17171a; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.muse-item .side-avatar { background: #0064d4; color: #fff; }
+.side-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 新建旁聊按钮：边栏顶部，全宽、浅蓝底，像 Muse 里新建对话那样 */
+#new-room-btn { display: block; width: 100%; margin: 0 0 10px; padding: 9px 12px; border: 1px solid #dbeafe; border-radius: 10px; background: #f0f6ff; color: #0064d4; font-size: 14px; font-weight: 600; cursor: pointer; text-align: left; }
+#new-room-btn:hover { background: #e8f1fe; }
+#new-room-btn:disabled { opacity: .5; }
+/* 会话列表（旁聊）：一行两行——名字 + 最后一条消息摘要，右边带时间；
+   当前在看的会话浅蓝底高亮，像 Muse 左边栏那样。
+   每间右边有个 ⋯ 管理按钮（只有管理员能看到），点开小菜单改名/删除；
+   主群只有改名、没有删除。 */
+.room-row { position: relative; display: flex; align-items: stretch; }
+/* 未读蓝点：某间有你还没看的消息时，左上角一个蓝色小圆点（像 Muse 那样）。
+   贴在头像左上角，带一圈白边，盖在头像上也看得清。 */
+.unread-dot { position: absolute; left: 3px; top: 3px; width: 12px; height: 12px;
+  border-radius: 50%; background: #0064d4; border: 2px solid #fff; z-index: 2;
+  pointer-events: none; }
+/* 已归档区：边栏底部的折叠区，归档的旁聊收在这里；点“已归档”展开/收起，
+   里面哪间有未读消息，标题右边亮一个蓝点。 */
+.archived-sec { margin-top: 8px; border-top: 1px solid #f3f4f5; padding-top: 4px; }
+.archived-toggle { position: relative; display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: #6b7280; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; }
+.archived-toggle:hover { background: #f3f4f5; color: #17171a; }
+.archived-caret { display: inline-block; transition: transform .15s; font-size: 11px; }
+.archived-toggle.open .archived-caret { transform: rotate(90deg); }
+.archived-count { font-weight: 400; }
+.archived-dot { left: auto; right: 12px; top: 50%; margin-top: -6px; }
+.archived-list { margin-top: 2px; }
+.room-row .room-item { flex: 1; min-width: 0; }
+.room-menu-btn { flex: 0 0 auto; width: 26px; border: 0; background: transparent; color: #9ca3af; font-size: 16px; font-weight: 700; line-height: 1; padding: 0; margin: 6px 2px 6px 0; border-radius: 8px; cursor: pointer; }
+.room-menu-btn:hover { background: #f3f4f5; color: #17171a; }
+.room-menu { position: absolute; right: 4px; top: calc(100% - 2px); z-index: 30; min-width: 110px; background: #fff; border: 1px solid #e9eaeb; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 4px; }
+.room-menu button { display: block; width: 100%; padding: 8px 12px; border: 0; border-radius: 8px; background: transparent; color: #17171a; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer; }
+.room-menu button:hover { background: #f3f4f5; }
+.room-menu button[data-act="delete"] { color: #dc2626; }
+.room-menu button[data-act="delete"]:hover { background: #fef2f2; }
+.room-item { position: relative; align-items: flex-start; padding: 9px 10px; }
+.room-item.active { background: #f0f6ff; }
+.room-item.active:hover { background: #e8f1fe; }
+.room-item.active .side-name { color: #0064d4; }
+.room-item .side-avatar { margin-top: 1px; }
+.side-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.side-preview { font-size: 12.5px; font-weight: 400; color: #6b7280; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-time { flex: 0 0 auto; font-size: 11.5px; font-weight: 400; color: #9ca3af; margin-top: 2px; }
+#side-toggle { display: none; border: 1px solid #e9eaeb; background: #fff; color: #17171a; border-radius: 10px; padding: 6px 12px; font-size: 16px; }
+header { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; padding: 12px 4px 16px; border-bottom: 1px solid #f3f4f5; margin-bottom: 16px; }
+header h1 { font-size: 24px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+header div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+header div span { font-size: 14px; color: #6b7280; }
+header a {
+  color: #17171a; text-decoration: none; font-size: 14px; font-weight: 600;
+  padding: 6px 14px; border: 1px solid #e9eaeb; border-radius: 999px; background: #fff;
+}
+header a:hover { background: #f3f4f5; }
+.card {
+  background: #fff; border: 1px solid #e9eaeb; border-radius: 20px;
+  padding: 20px; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.04);
+  position: relative;
+}
+.card h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+/* 聊天页不套卡片：消息区直接铺满，像 Muse 应用里的对话页；
+   登录页和管理页仍用上面的 .card。
+   输入框钉底：聊天卡片是竖向 flex、占满剩余高度（min-height: 0 让消息区
+   能在 flex 里滚动而不把整页撑高），消息区 flex:1 滚动，输入区钉在底部。 */
+.card.chat-card { background: transparent; border: 0; box-shadow: none; padding: 4px 0 0; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.hint { color: #6b7280; font-size: 13.5px; line-height: 1.6; }
+.err {
+  color: #dc2626; font-size: 14px; background: #fef2f2;
+  border: 1px solid #fecaca; border-radius: 12px; padding: 10px 14px;
+}
+#msg-list {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px; align-items: flex-start;
+  scrollbar-width: thin; scrollbar-color: #d7dceb transparent;
+  padding: 4px 2px;
+}
+#msg-list::-webkit-scrollbar { width: 8px; }
+#msg-list::-webkit-scrollbar-thumb { background: #d7dceb; border-radius: 999px; }
+#msg-list::-webkit-scrollbar-track { background: transparent; }
+/* 聊天界面式气泡：别人靠左白底、自己靠右灰底、助手/助手靠左浅蓝底；
+   头像圆字，自己的消息不显示头像和名字，只留时间。 */
+.msg { max-width: 78%; padding: 10px 14px; border-radius: 18px; border-bottom-left-radius: 6px; background: #fff; border: 1px solid #e9eaeb; align-self: flex-start; }
+.msg-row { display: flex; gap: 10px; align-items: flex-start; }
+.msg-content { flex: 1; min-width: 0; }
+.avatar { flex: 0 0 auto; width: 32px; height: 32px; border-radius: 50%; background: #e9eaeb; color: #17171a; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+.msg .meta { font-size: 13px; color: #6b7280; }
+.msg .meta b { color: #17171a; font-size: 14px; font-weight: 600; }
+.msg .body { white-space: pre-wrap; word-break: break-word; font-size: 16px; line-height: 1.6; margin-top: 2px; color: #17171a; }
+.msg.muse { background: #f0f6ff; border-color: transparent; }
+.msg.muse .meta b { color: #0064d4; }
+.msg.muse .avatar { background: #0064d4; color: #fff; }
+/* 自己的消息：靠右灰气泡，不显示头像和名字 */
+.msg.own { align-self: flex-end; margin-left: auto; background: #f3f4f5; border-color: transparent; border-radius: 18px; border-bottom-right-radius: 6px; }
+.msg.own .avatar { display: none; }
+.msg.own .meta { text-align: right; }
+.msg.own .meta b { display: none; }
+/* 先审后发：自己发的待审核消息，暖黄底 + 标注，仅自己可见 */
+.msg.pending { background: #fffbeb; border: 1px solid #fde68a; }
+.review-tag { color: #b45309; font-weight: 600; }
+/* 群内直接审核：管理员在待审核消息下面点的通过 / 不通过 */
+.review-actions { margin-top: 8px; }
+.review-actions button { padding: 6px 14px; font-size: 13px; margin-right: 6px; }
+.review-actions button:disabled { opacity: .5; }
+/* 图片 / 视频 inline 预览：默认缩略图（跟 Muse 界面一样，最大 320px），点图放大看原图；
+   视频同宽带播放器，右上角 ⛶ 点开放大播。 */
+.msg .body img { max-width: min(320px, 100%); max-height: 320px; border-radius: 12px; display: block; margin-top: 6px; cursor: zoom-in; }
+.msg .body video { max-width: min(320px, 100%); max-height: 320px; border-radius: 12px; display: block; margin-top: 6px; background: #000; }
+.msg .body .media-wrap { position: relative; display: inline-block; max-width: min(320px, 100%); margin-top: 6px; }
+.msg .body .media-wrap video { max-width: 100%; margin-top: 0; }
+.msg .body .media-expand { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: rgba(0,0,0,.55); color: #fff; font-size: 16px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.msg .body .media-expand:hover { background: rgba(0,0,0,.8); }
+/* 点图放大：全屏遮罩 + 原图/原视频居中，点空白处、点 × 或按 Esc 关闭 */
+#media-lightbox { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.85); }
+#media-lightbox.open { display: flex; }
+#media-lightbox img, #media-lightbox video { max-width: 92vw; max-height: 92vh; border-radius: 8px; }
+#media-lightbox .lb-close { position: absolute; top: 16px; right: 16px; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: rgba(255,255,255,.15); color: #fff; font-size: 22px; line-height: 1; cursor: pointer; }
+#media-lightbox .lb-close:hover { background: rgba(255,255,255,.3); }
+#media-lightbox .lb-open { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 14px; text-decoration: none; background: rgba(255,255,255,.15); padding: 8px 16px; border-radius: 999px; white-space: nowrap; }
+#media-lightbox .lb-open:hover { background: rgba(255,255,255,.3); text-decoration: none; }
+.msg .body a { color: #0064d4; word-break: break-all; text-decoration: none; }
+.msg .body a:hover { text-decoration: underline; }
+/* 文件链接：只显示文件名（📎 + 文件名），点文件名直接下载 */
+.msg .body a.file-link { font-weight: 600; }
+/* 往上翻记录时来了新消息：不拽滚动条，只在输入框上方出这个按钮，点它再到底部。
+   按钮挂在输入框上面（.send-row 相对定位），不再按卡片底部的固定像素算，
+   免得被下面那段说明文字盖住。 */
+#new-msg-pill {
+  position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%);
+  z-index: 5; padding: 8px 16px; font-size: 13px; font-weight: 600;
+  border-radius: 999px; border: 0; background: #17171a; color: #fff;
+  box-shadow: 0 4px 16px rgba(0,0,0,.2); white-space: nowrap;
+}
+/* 往上翻加载更早的消息：列表顶部状态行（加载中 / 到头了） */
+#older-status { align-self: center; font-size: 13px; color: #6b7280; padding: 6px 0 2px; }
+/* @ 提醒：输入 @ 弹出配置好的 Muse 名单，点一下（或上下键+回车/Tab）插入 */
+#mention-list { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 10; min-width: 200px; max-width: 100%; max-height: 220px; overflow-y: auto; background: #fff; border: 1px solid #e9eaeb; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 4px; }
+#mention-list .mention-item { padding: 8px 12px; border-radius: 8px; font-size: 15px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#mention-list .mention-item:hover, #mention-list .mention-item.selected { background: #f0f6ff; }
+#mention-list .mention-item b { color: #0064d4; font-weight: 600; }
+/* 回复引用：消息正文上方一条引用行（被引的人 + 首行摘要），点它不跳转，只看 */
+.msg .quote { font-size: 13px; color: #6b7280; background: #f3f4f5; border-left: 3px solid #d7dceb; border-radius: 6px; padding: 4px 8px; margin: 4px 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg.muse .quote { background: #e8f1fe; border-left-color: #0064d4; }
+.msg.own .quote { background: #e9eaeb; }
+/* 每条消息上的“↩ 回复”小按钮，平时淡、悬停时显 */
+.reply-btn { background: transparent; border: 0; color: #9ca3af; font-size: 12px; font-weight: 500; padding: 0 4px; cursor: pointer; }
+.reply-btn:hover { color: #0064d4; background: transparent; }
+/* 消息表情回应：每条消息正文下面一排小表情 chips（像 Muse 界面的“留下心情” / TG 的回复表情）。
+   chips 是胶囊小按钮，带人数；自己留过的那颗浅蓝底高亮；😊 是加表情的入口。 */
+.reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.react-chip { padding: 2px 8px; border: 1px solid #e9eaeb; border-radius: 999px; background: #fff; color: #17171a; font-size: 13px; font-weight: 500; line-height: 1.5; cursor: pointer; }
+.react-chip:hover { background: #f3f4f5; }
+.react-chip.mine { background: #f0f6ff; border-color: #0064d4; color: #0064d4; }
+.react-add { padding: 2px 8px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: #9ca3af; font-size: 13px; line-height: 1.5; cursor: pointer; }
+.react-add:hover { background: #f3f4f5; color: #17171a; }
+/* 表情选择器：点 😊 弹出的小浮层，8 个表情一排，点一个就留 */
+#react-picker { position: fixed; z-index: 40; display: flex; gap: 2px; padding: 6px; background: #fff; border: 1px solid #e9eaeb; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+.react-pick { width: 36px; height: 36px; padding: 0; border: 0; border-radius: 10px; background: transparent; font-size: 20px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.react-pick:hover { background: #f0f6ff; }
+/* 回复中的提示条：输入框上方，显示在回谁、点 × 取消 */
+#reply-bar { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: #4b5563; background: #f0f6ff; border: 1px solid #dbeafe; border-radius: 10px; padding: 6px 10px; margin-top: 12px; }
+#reply-bar-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#reply-cancel { border: 0; background: transparent; color: #6b7280; font-size: 18px; line-height: 1; padding: 2px 6px; cursor: pointer; }
+#reply-cancel:hover { color: #17171a; background: transparent; }
+/* 附件先挂后发：输入框上方一排 chips（像 Muse 那样），图片是本地缩略图，
+   其他是图标 + 名字；传完再点发送才一起发出去。没附件时整条隐藏。 */
+#attach-bar { display: none; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.attach-chip { display: flex; align-items: center; gap: 8px; max-width: 240px; padding: 6px 8px; border: 1px solid #e9eaeb; border-radius: 12px; background: #fff; }
+.attach-chip.error { border-color: #fecaca; background: #fef2f2; }
+.attach-chip img { flex: 0 0 auto; width: 40px; height: 40px; object-fit: cover; border-radius: 8px; }
+.attach-icon { flex: 0 0 auto; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 22px; background: #f3f4f5; border-radius: 8px; }
+.attach-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.attach-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.attach-size { font-size: 12px; color: #9ca3af; }
+.attach-state { font-size: 12px; color: #0064d4; }
+.attach-state.err { color: #dc2626; }
+.attach-retry { border: 0; background: transparent; color: #0064d4; font-size: 12px; font-weight: 600; padding: 0; cursor: pointer; }
+.attach-retry:hover { background: transparent; text-decoration: underline; }
+.attach-remove { flex: 0 0 auto; border: 0; background: transparent; color: #9ca3af; font-size: 18px; line-height: 1; padding: 2px 6px; cursor: pointer; }
+.attach-remove:hover { color: #17171a; background: transparent; }
+/* 本地拖拽上传：拖着文件进聊天区时，整个聊天区盖一层提示（虚线框 + 半透明蓝底）。
+   平时隐藏，JS 在 dragenter 时显示；pointer-events 关掉，免得它挡住 drop 事件。 */
+#drop-overlay { position: absolute; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: rgba(0,100,212,.08); border: 2px dashed #0064d4; border-radius: 16px; color: #0064d4; font-size: 18px; font-weight: 600; pointer-events: none; }
+.send-row { display: flex; gap: 10px; margin-top: 16px; position: relative; align-items: flex-end; flex: 0 0 auto; }
+/* 输入框改多行 textarea：默认 1 行，随内容自适应到最多 8 行，超过框内滚动；
+   8 行按行高 1.6 × 16px ≈ 26px/行算，max-height 228px（8×26+上下内边距 20px），
+   JS 里的 LINE_H/MAX_LINES 要和这里同步。 */
+.send-row textarea {
+  flex: 1; min-width: 0; padding: 10px 18px; border: 1px solid #d7dceb; border-radius: 22px;
+  font-size: 16px; line-height: 1.6; background: #fff; color: #17171a; font-family: inherit;
+  resize: none; overflow-y: hidden; max-height: 228px;
+}
+.send-row textarea:focus { outline: none; border-color: #0064d4; box-shadow: 0 0 0 4px rgba(0,100,212,.12); }
+/* 发送按钮是蓝色圆形上箭头，像 Muse 应用里那样 */
+.send-row button[type=submit] { flex: 0 0 auto; width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 20px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+/* 附件还在上传时发送按钮禁用（等传完再发，免得附件漏发） */
+.send-row button[type=submit]:disabled { opacity: .45; cursor: default; }
+/* 上传文件按钮：圆角方框 ＋，和发送按钮同高对齐 */
+#upload-btn { flex: 0 0 auto; width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 22px; line-height: 1; display: flex; align-items: center; justify-content: center; background: #fff; color: #17171a; border: 1px solid #d7dceb; }
+#upload-btn:hover { background: #f3f4f5; }
+#upload-btn:disabled { opacity: .5; }
+/* @ Muse 按钮：和上传按钮一样大、一样圆，点开 Muse 名单选人 @ 他 */
+#mention-btn { flex: 0 0 auto; width: 46px; height: 46px; padding: 0; border-radius: 50%; font-size: 20px; font-weight: 600; line-height: 1; display: flex; align-items: center; justify-content: center; background: #fff; color: #0064d4; border: 1px solid #d7dceb; }
+#mention-btn:hover { background: #f0f6ff; }
+button, input[type=submit] {
+  padding: 12px 22px; border: 0; border-radius: 999px;
+  background: #0064d4; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+button:hover, input[type=submit]:hover { background: #0057b8; }
+button:active, input[type=submit]:active { background: #004a9e; }
+button.danger { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+button.danger:hover { background: #fee2e2; }
+button:focus-visible, input[type=submit]:focus-visible, a:focus-visible { outline: 2px solid #0064d4; outline-offset: 2px; }
+input[type=text], input[type=password], select {
+  padding: 12px 14px; border: 1px solid #d7dceb; border-radius: 12px;
+  font-size: 15px; width: 100%; margin: 6px 0; background: #fff; color: #17171a;
+  font-family: inherit;
+}
+input[type=text]:focus, input[type=password]:focus, select:focus { outline: none; border-color: #0064d4; box-shadow: 0 0 0 4px rgba(0,100,212,.12); }
+label { display: block; font-size: 14px; font-weight: 600; color: #4b5563; margin: 10px 0 2px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+td, th { padding: 12px 8px; border-bottom: 1px solid #f3f4f5; text-align: left; }
+th { font-size: 13px; font-weight: 600; color: #6b7280; }
+tbody tr:hover, tr:hover td { background: #fafafa; }
+@media (max-width: 760px) {
+  /* 手机上左边栏默认收起，点 ☰ 再滑出来（盖在聊天区上面）；桌面一直显示。
+     展开后边栏会盖住左上角的 ☰，所以栏里有 ×、外面有遮罩，点哪边都能关。 */
+  .sidebar { display: none; position: fixed; left: 0; top: 0; bottom: 0; z-index: 20; width: 260px; background: #fff; box-shadow: 8px 0 24px rgba(0,0,0,.12); }
+  .sidebar.open { display: block; }
+  .sidebar.open ~ #side-backdrop { display: block; position: fixed; inset: 0; z-index: 15; background: rgba(0,0,0,.25); }
+  #side-toggle { display: inline-block; }
+  #side-close { display: inline-block; }
+}
+@media (max-width: 600px) {
+  .wrap { padding: 12px 10px 24px; }
+  .card { padding: 14px; border-radius: 16px; }
+  .card.chat-card { padding: 0; }
+  header h1 { font-size: 20px; }
+  .msg { max-width: 88%; }
+  .msg .body { font-size: 15px; }
+}
